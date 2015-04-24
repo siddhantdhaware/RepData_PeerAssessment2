@@ -1,0 +1,23 @@
+---
+title: "Calamity"
+output: html_document
+---
+
+###  Synopsis
+
+In this report we aim to describe the public health and economic problems caused by storms and other severe weather events.
+
+-----
+
+### Data Processing
+
+We are using the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. The events in the database start in the year **1950** and end in **November 2011**.
+
+#### Loading the dataset into R
+
+```{r, cache=TRUE}
+data <- read.csv("repdata_data_StormData.csv.bz2")
+```
+
+
+
