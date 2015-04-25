@@ -1,23 +1,323 @@
+<style>
+    table {
+        border: 1px #e5e5e5 solid;
+    }
+
+    table tr:nth-child(even) {
+        background-color: #f1f1f1;
+    }
+
+    table td, table th {
+        padding: 5px 20px;
+        text-align: center;
+        border: none;
+        border-right: 1px solid #e5e5e5;
+    }
+
+    table th {
+        background-color: #f1f1f1;
+        border-bottom: 2px #e5e5e5 solid;
+    }
+
+</style>
 ---
-title: "Calamity"
+title: "Public Health and Economic Consequences of Natural Disasters"
 output: html_document
 ---
 
 ###  Synopsis
 
-In this report we aim to describe the public health and economic problems caused by storms and other severe weather events.
+In this report we aim to describe the public health and economic problems
+in the USA, caused by storms and other severe weather events, using data from
+the year **1950** to **2011** . Regarding Public health, '**Tornado**' is the 
+most harmful event, followed by '**Excessive Heat**'. Tornados are responsible 
+for 65% of all injuries and 37.19% of all fatalities. And Regarding Economic 
+damage, '**Flood**' is the most economically damaging event. Floods alone have 
+caused 31.5% of the total economic damage, and it is followed by 
+'**Hurricane/Typhoon**' and '**Tornado**'.
 
 -----
 
+Loading the required packages into R:
+
+```{r, message=F}
+library(dplyr);
+library(ggplot2);
+library(xtable);
+```
 ### Data Processing
 
-We are using the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. The events in the database start in the year **1950** and end in **November 2011**.
+We are using the U.S. National Oceanic and Atmospheric Administration's (NOAA) 
+storm database. The events in the database start in the year **1950** and end 
+in **November 2011**.
 
 #### Loading the dataset into R
 
 ```{r, cache=TRUE}
-data <- read.csv("repdata_data_StormData.csv.bz2")
+data <- read.csv("repdata_data_StormData.csv.bz2");
+colnames(data);
+```
+
+#### Processing the data, to create a final dataset
+
+This data needs to be processed in two ways:
+
+- As seen above, the data containes 37 columns in total. For the purpose of this report, we are only 
+interested in 8 of them. Hence we need to take a subset of the data, containing the following columns:
+	
+	1. "STATE": The State that the event took place in.
+	2. "EVTYPE": Type of Event.
+	3. "FATALITIES": Number of Fatalities from the event
+	4. "INJURIES": Number of Injuries from the event
+	5. "PROPDMG": Property damage in USD
+	6. "PROPDMGEXP": Magnitude of property damage
+	7. "CROPDMG": Crop damage in USD
+	8. "CROPDMGEXP": Magnitude of crop damage
+	<br />
+	<br />
+
+- There are two pairs of columns pertaining to the damage costs("PROPDMG", "PROPDMGEXP", "CROPDMG", 
+"CROPDMGEXP"). For our final dataset, we need to combine each pair, into one single column, by 
+multiplying the numeric value of the damage(eg. "PROPDMG"), to its magnitude/exponent(eg. "PROPDMGEXP"
+).
+
+We will begin by first creating the individual columns for each type of damage:
+
+Before we multiply the *PROPDMG* and *CROPDMG* columns with the *PROPDMGEXP* and *CROPDMGEXP* columns 
+respectively, we need to mutate the values of the *EXP columns, by replacing the characters and numbers 
+in them, with their actual numeric values. Example: "B" = 10^9, "K" = 10^3, "5" = 10^5.
+
+```{r, cache=TRUE}
+prop_exp <- as.vector(data$PROPDMGEXP);
+crop_exp <- as.vector(data$CROPDMGEXP);
+
+# Loop through the vector, and mutate its values.
+clean <- function(v) {
+	
+	for(i in 1:length(v)) {
+		if (v[i] == "1") {
+			v[i] <- "10";
+		} else if (v[i] == "2" || v[i] == "H" || v[i] == "h") {
+			v[i] <- "100";
+		} else if (v[i] == "3" || v[i] == "K" || v[i] == "k") {
+			v[i] <- "1000";
+		} else if (v[i] == "4") {
+			v[i] <- "10000";
+		} else if (v[i] == "5") {
+			v[i] <- "100000";
+		} else if (v[i] == "6" || v[i] == "M" || v[i] == "m") {
+			v[i] <- "1000000";
+		} else if (v[i] == "7") {
+			v[i] <- "10000000";
+		} else if (v[i] == "8") {
+			v[i] <- "100000000";
+		} else if (v[i] == "B") {
+			v[i] <- "1000000000";
+		} else if (v[i] == "0"){
+			v[i] <- "1";
+		} else {
+			v[i] <- NA;
+		}
+	}
+	v
+}
+
+prop_exp <- as.integer(clean(prop_exp));
+crop_exp <- as.integer(clean(crop_exp));
+```
+
+Now that we have mutated PROPDMGEXP and CROPDMGEXP columns, we can multiply them with 
+PROPDMG and CROPDMG respectively, and get two columns: property damage and crop damage,
+the values of each one of them being the actual damage done in USD(eg. 25000).
+We can then add these two columns, to get a single column for the total damage done.
+
+```{r, cache=TRUE}
+PROPDMG <- data$PROPDMG * prop_exp;
+CROPDMG <- data$CROPDMG * crop_exp;
+
+prop_crop_dmg <- as.data.frame(cbind(PROPDMG, CROPDMG));
+
+# Create a final data frame with PROPDMG, CROPDMG and total DMG. The total DMG needs 
+# to have the value of CROPDMG + PROPDMG, and needed to be manipulated in case
+# CROPDMG and/or PROPDMG have NA's.
+
+total_dmg <- mutate(prop_crop_dmg, DMG = ifelse(is.na(PROPDMG) & is.na(CROPDMG), NA,
+					   (ifelse(is.na(PROPDMG), 0, PROPDMG)) +
+					   	(ifelse(is.na(CROPDMG), 0, CROPDMG))
+));
+
+```
+
+**Creating the Final dataset**
+
+We can now create our final dataset, by subsetting the necessary columns from the
+original dataset, and by adding the '*total_dmg*' data frame we create above, to our final dataset. 
+We will and print out the first 6 rows of the final dataset, to make sure everything worked properly. 
+And then write the processed dataset into a file called 'data.csv' 
+
+```{r, cache=TRUE}
+data <- data[,c(7,8,23,24)];
+data$PROPDMG <- total_dmg$PROPDMG;
+data$CROPDMG <- total_dmg$CROPDMG;
+data$DMG <- total_dmg$DMG;
+head(data);
+nrow(data);
+write.csv(data, "data.csv");
 ```
 
 
+-----
 
+### Results
+
+#### 1. Across the United States, which types of events (as indicated in the 'EVTYPE' variable) are most harmful with respect to population health?
+
+We create two data frames, *fatalities* and *injuries*. For each one of them, we aggregating the sum of its values, according to the type of event, and arrange it in the descending order.
+
+```{r, cache=TRUE}
+
+fatalities <- as.data.frame(arrange(aggregate(FATALITIES ~ EVTYPE, data, sum, na.rm=TRUE), desc
+(FATALITIES)));
+
+injuries <- as.data.frame(arrange(aggregate(INJURIES ~ EVTYPE, data, sum, na.rm=TRUE), desc(INJURIES
+)));
+
+```
+
+
+Using the *fatalities* data frame from above, we can now create a table and a plot, of the top 6 most 
+fatal events.
+
+**Fatalities Table**:
+```{r, results="asis"}
+print(xtable(head(fatalities)), type="html");
+
+```
+<br />
+**Fatalities Plot**:
+```{r, fig.width=9}
+ggplot(data = head(fatalities), aes(x = head(fatalities)$EVTYPE, y = head(fatalities)$FATALITIES)) + 
+geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + xlab("Event 
+Type") + ylab("Number of Fatalities") + ggtitle("Top 6 Highest Fatality events") + theme_bw() + aes(fill 
+= head(fatalities)$EVTYPE) + guides(fill=FALSE);												  																																								
+```
+
+Similarly, using the *injuries* data frame, we can create a table and a plot of the top 6 events which 
+created the most number of injuries.
+
+**Injuries Table**:
+```{r, results="asis"}
+print(xtable(head(injuries)), type="html");
+```
+<br />
+**Injuries Plot**:
+```{r, fig.width=9}
+ggplot(data = head(injuries), aes(x = head(injuries)$EVTYPE, y = head(injuries
+)$INJURIES)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(
+angle = 90, hjust = 1)) + xlab("Event Type") + ylab("Number of Injuries") + 
+ggtitle("Top 6 Highest Injury events") + theme_bw() + aes(fill 
+= head(injuries)$EVTYPE) + guides(fill=FALSE);
+
+```
+
+Getting the percentage of total injuries and fatalities caused by Tornado:
+```{r}
+sum_injuries <- sum(injuries$INJURIES);
+sum_fatalities <- sum(fatalities$FATALITIES);
+
+tornado_injuries <- (injuries$INJURIES[1]/sum_injuries)*100;
+tornado_fatalities <- (fatalities$FATALITIES[1]/sum_fatalities)*100;
+
+```
+
+Percentage of the total Injuries caused by Tornado:
+```{r}
+# 
+paste(as.vector(tornado_injuries), "%", sep="");
+```
+
+Percentage of the total Fatalities caused by Tornado:
+```{r}
+paste(as.vector(tornado_fatalities), "%", sep="");
+```
+**Answer**
+
+> It is clear from the tables and plots above, that **Tornado** is the most harmful event with respect to 
+population health. Since 1950 to 2011, it is responsible for 91346 injuries(65% of the total injuries), 
+and 5633 fatalities(37.19% of the total fatalites), placing it at the No.1 position of both tables. 
+**Excessive Heat** is also a dangerous event, it has caused a total of 1903 fatalities and 6525 injuries, 
+making it No.2 on the fatalities table and No.4 on the injuries table.
+
+-----
+
+#### 2. Across the United States, which types of events have the greatest economic consequences?
+
+We create a data frame, called *dmg*, by aggregating the sum of the Net 
+Economic Damage, according to the event type, and arrange it in the 
+in the descending order.
+
+```{r}
+dmg <- as.data.frame(arrange(aggregate(DMG ~ EVTYPE, data, sum, na.rm=TRUE), 
+desc(DMG)));
+```
+
+Using the *dmg* data frame, we can now create a table and a plot, of the total 
+economic damage done by the top 6, most damaging events.
+
+**Table of Total Economic Damage**
+
+```{r, results="asis"}
+print(xtable(head(dmg)), type="html");
+```
+<br />
+**Plot of Total Economic Damage**
+
+```{r, fig.width=9}
+ggplot(data = head(dmg), aes(x = head(dmg)$EVTYPE, y = head(dmg)$DMG)) + 
+geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90, 
+hjust = 1)) + xlab("Event Type") + ylab("Total Economic Damage (USD)") + 
+ggtitle("Top 6: Most Economic Damage Causing events") + theme_bw() + aes(fill 
+= head(dmg)$EVTYPE) + guides(fill=FALSE);
+```
+
+**Percentage of the Total Damage caused by Flood, HURRICANE/TYPHOON and TORNADO**
+
+```{r}
+total_dmg <- sum(dmg$DMG);
+
+flood_dmg <- (dmg$DMG[1]/total_dmg)*100;
+hurricane_dmg <- (dmg$DMG[2]/total_dmg)*100;
+tornado_dmg <- (dmg$DMG[3]/total_dmg)*100;
+```
+
+Total Damage in USD:
+
+```{r}
+paste(as.vector(total_dmg),"USD", sep=" ");
+```
+
+Percentage of the total damage due to Flood:
+
+```{r}
+paste(as.vector(flood_dmg),"%",sep="");
+```
+
+Percentage of the total damage due to Hurricane/Typhoon:
+
+```{r}
+paste(as.vector(hurricane_dmg),"%",sep="");
+```
+
+Percentage of the total damage due to Tornado:
+```{r}
+paste(as.vector(tornado_dmg),"%",sep="");
+```
+
+**Answer**
+
+> As seen from the table and the plot above. **Flood** is the most Economically 
+damaging event, and from 1950 to 2011, out of the total 477.33 Billion USD of 
+damage, Flood alone has caused damage of around 150.32 Billion USD(31.5% of the 
+total damage). It is followed by **Hurricane/Typhoon** and **Tornado** which 
+have caused damages worth 71.91 Billion USD(15% of the total damage), and 57.36 
+Billion USD(12% of the total damage), respectively.

@@ -1,4 +1,6 @@
 library(dplyr);
+library(ggplot2);
+library(xtable);
 prop_exp <- as.vector(data$PROPDMGEXP)
 crop_exp <- as.vector(data$CROPDMGEXP)
 
